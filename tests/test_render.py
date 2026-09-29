@@ -1,4 +1,6 @@
 """Smoke tests: every screen renders on a headless display without crashing."""
+import asyncio
+
 import pygame
 import pytest
 
@@ -42,10 +44,12 @@ def screen():
 
 
 def test_full_game_loop_renders(scripted_events, monkeypatch):
-    monkeypatch.setattr(main, "start_screen", lambda *a: ("Hard", True))
+    async def start_screen(*_a):
+        return "Hard", True
+    monkeypatch.setattr(main, "start_screen", start_screen)
     ended = {}
 
-    def end_screen(screen, clock, won, pacman, *a):
+    async def end_screen(screen, clock, won, pacman, *a):
         ended["won"] = won
         return False
     monkeypatch.setattr(main, "end_screen", end_screen)
@@ -59,20 +63,33 @@ def test_full_game_loop_renders(scripted_events, monkeypatch):
         120: [key(pygame.K_SPACE)],          # back to AI
         200: [key(pygame.K_r)],              # restart
     }, quit_after=3000)
-    main.run_game(seed=0)
+    asyncio.run(main.run_game(seed=0))
     assert frames["n"] > 200
 
 
 def test_start_screen_returns_choice(scripted_events, screen):
     scripted_events({3: [key(pygame.K_RETURN)]}, quit_after=100)
-    assert main.start_screen(screen, FakeClock(), 588, 616) == ("Medium", True)
+    assert asyncio.run(main.start_screen(screen, FakeClock(), 588, 616)) == ("Medium", True)
+
+
+def test_start_screen_escape_quits(scripted_events, screen):
+    scripted_events({2: [key(pygame.K_ESCAPE)]}, quit_after=100)
+    assert asyncio.run(main.start_screen(screen, FakeClock(), 588, 616)) is None
 
 
 @pytest.mark.parametrize("won", [True, False])
 def test_end_screen_replays_on_r(scripted_events, screen, won):
     game = Game("Easy", seed=0)
     scripted_events({3: [key(pygame.K_r)]}, quit_after=100)
-    assert main.end_screen(screen, FakeClock(), won, game.pacman, 908, 616, 12.5) is True
+    assert asyncio.run(main.end_screen(screen, FakeClock(), won, game.pacman, 908, 616, 12.5)) is True
+
+
+def test_comparison_screen_closes_on_any_key(scripted_events, screen):
+    game = Game("Easy", seed=0)
+    scripted_events({3: [key(pygame.K_x)]}, quit_after=100)
+    start = (game.pacman.row, game.pacman.col)
+    assert asyncio.run(main.comparison_screen(screen, FakeClock(), game.maze, start,
+                                              (1, 1), 908, 616)) is True
 
 
 def test_panel_renders_every_state(screen):

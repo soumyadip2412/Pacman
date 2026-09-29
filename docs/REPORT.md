@@ -1,3 +1,5 @@
+> **Note (updated):** this is the original academic write-up. Numbers and design details below were corrected to match the code; the up-to-date results come from `python benchmark.py` and are listed in the [README](../README.md#results).
+
 # Intelligent Pac-Man Agent Using A* Search Algorithm
 
 College: [Your College Name]
@@ -65,7 +67,7 @@ Design and implement a goal-based intelligent Pac-Man agent that collects all pe
 
 2.3 Non-functional Requirements
 
-- Real-time responsiveness (≤ 60 FPS target; search latency << frame time).
+- Real-time responsiveness (30 FPS game loop; search latency << frame time).
 - Reproducible metrics and logging.
 - Cross-platform using Python and Pygame.
 - Clear code structure and documentation for assessment.
@@ -80,7 +82,7 @@ Design and implement a goal-based intelligent Pac-Man agent that collects all pe
 
 - Visual display of the game
 - Live metrics panel (nodes explored, execution time, path cost)
-- End-of-run summary and optional CSV log
+- End-of-run summary; reproducible measurements with `benchmark.py`
 
 2.6 Constraints
 
@@ -419,13 +421,15 @@ Per-run metrics to capture (CSV-compatible):
 
 Run,Score,PlayTime_s,Searches,TotalNodes,AvgNodesPerSearch,TotalSearchTime_s,AvgSearch_ms,Steps,Pellets,PowerPellets,GhostsEaten,LivesLost
 
-Example results table (hypothetical):
+Measured results (`python benchmark.py`, every ordered pair of the 209 reachable cells, 43,472 searches per algorithm):
 
 | Metric | BFS | DFS | A* |
 |--------|----:|----:|---:|
-| Avg nodes explored | 280 | 320 | 78 |
-| Avg execution time (ms) | 1.2 | 0.9 | 0.45 |
-| Avg path length | 34 | 61 | 34 |
+| Mean nodes expanded | 105.5 | 105.5 | 34.4 |
+| Shortest path found | 100% | 12% | 100% |
+| Path length vs optimal | 1.0x | 4.62x mean, 63x max | 1.0x |
+
+AI agent, 40 seeded games per difficulty: Easy 40/40 wins, Medium 40/40, Hard 23/40.
 
 8.4 Discussion of Results
 
@@ -549,7 +553,7 @@ A: Python enables rapid development, clear algorithmic expression, and good libr
 A: The `comparison_screen` runs BFS, DFS, and A* on the same start/goal pair and displays nodes, path length, path cost, and time to allow side-by-side evaluation.
 
 22. Q: How do you handle ties when two nodes have equal f(n)?  
-A: Use a secondary key (g(n)) so that, for example, nodes with larger g are preferred to reduce re-expansion and focus exploration.
+A: Use a secondary key. This project pushes `(f, g, node)`, so on equal f the node with the lower g is popped first; pushing `(f, -g, node)` would prefer larger g, which often expands fewer nodes. Either way the path stays optimal.
 
 23. Q: What is the experimental protocol to evaluate algorithms?  
 A: Run multiple trials with the same maze and difficulty, record metrics (nodes, time, path length), compute averages and variance, and present tables and plots.
@@ -583,7 +587,3 @@ Slide 8 — Results: Example table comparing nodes/time/path length; screenshot 
 Slide 9 — Discussion: Why A* performed best; trade-offs and observations.
 
 Slide 10 — Conclusion & Future Work: Summary, suggested extensions (RL, adaptive ghosts).
-
----
-
-If you want, I can now add an automated CSV logger that writes `run_summary.csv` with one row per completed game, or create the PPT slides as a simple PowerPoint file. Which would you like next?

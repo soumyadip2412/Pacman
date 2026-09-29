@@ -24,7 +24,7 @@ CONTROLS:
     ESC          – Quit
 """
 
-import sys
+import asyncio
 import math
 import time
 import pygame
@@ -103,10 +103,10 @@ def build_run_summary_rows(pacman, elapsed_seconds: float):
 # ══════════════════════════════════════════════════════════════════════════════
 #  START SCREEN
 # ══════════════════════════════════════════════════════════════════════════════
-def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool]:
+async def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool] | None:
     """
     Animated start screen.
-    Returns (difficulty_label, ai_mode: bool).
+    Returns (difficulty_label, ai_mode: bool), or None if the player quits.
     """
     total_w = maze_w + PANEL_WIDTH
     total_h = maze_h
@@ -134,14 +134,12 @@ def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool]:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                return None
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     return difficulty_keys[diff_idx], ai_mode
                 if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
+                    return None
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if buttons["start"].collidepoint(mx, my):
                     return difficulty_keys[diff_idx], ai_mode
@@ -192,7 +190,7 @@ def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool]:
                              2, border_radius=10)
 
             if bid == "start":
-                draw_text(screen, "▶  START GAME", brect.centerx, brect.centery,
+                draw_text(screen, "START GAME", brect.centerx, brect.centery,
                           size=22, color=COLORS["ui_accent"], bold=True, center=True)
             elif bid == "diff":
                 draw_text(screen,
@@ -210,12 +208,13 @@ def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool]:
                   size=14, color=(120, 130, 160), center=True)
 
         pygame.display.flip()
+        await asyncio.sleep(0)   # yield to the browser event loop (pygbag)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  GAME-OVER / WIN SCREEN
 # ══════════════════════════════════════════════════════════════════════════════
-def end_screen(screen, clock, won: bool, pacman, total_w: int, total_h: int,
+async def end_screen(screen, clock, won: bool, pacman, total_w: int, total_h: int,
                elapsed_seconds: float) -> bool:
     """Show game-over or win screen. Returns True to replay, False to quit."""
     tick = 0
@@ -292,17 +291,19 @@ def end_screen(screen, clock, won: bool, pacman, total_w: int, total_h: int,
                   size=18, color=(210, 220, 255), center=True)
 
         pygame.display.flip()
+        await asyncio.sleep(0)   # yield to the browser event loop (pygbag)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ALGORITHM COMPARISON SCREEN
 # ══════════════════════════════════════════════════════════════════════════════
-def comparison_screen(screen, clock, maze,
-                      start: tuple, goal: tuple,
-                      total_w: int, total_h: int):
+async def comparison_screen(screen, clock, maze,
+                            start: tuple, goal: tuple,
+                            total_w: int, total_h: int) -> bool:
     """
     Run BFS, DFS, A* on the same start→goal pair and display a
     side-by-side performance comparison table.
+    Returns False if the player closed the window, True otherwise.
     """
     # Run all three algorithms
     results = {}
@@ -315,8 +316,7 @@ def comparison_screen(screen, clock, maze,
         clock.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                return False
             if event.type == pygame.KEYDOWN:
                 waiting = False
 
@@ -324,11 +324,11 @@ def comparison_screen(screen, clock, maze,
         draw_text(screen, "ALGORITHM PERFORMANCE COMPARISON",
                   total_w // 2, 40, size=26, color=COLORS["ui_accent"],
                   bold=True, center=True)
-        draw_text(screen, f"Route: {start} → {goal}",
+        draw_text(screen, f"Route: {start} -> {goal}",
                   total_w // 2, 80, size=16, color=COLORS["ui_highlight"], center=True)
 
         # Table header
-        headers = ["Algorithm", "Nodes Explored", "Path Length", "Path Cost", "Time (ms)", "Optimal?"]
+        headers = ["Algorithm", "Nodes Explored", "Path Cells", "Path Cost", "Time (ms)", "Optimal?"]
         col_xs  = [80, 240, 400, 530, 660, 790]
         y       = 130
         for hdr, cx in zip(headers, col_xs, strict=True):
@@ -363,10 +363,10 @@ def comparison_screen(screen, clock, maze,
         # Insight notes
         y += 20
         notes = [
-            "★  A* expands far fewer nodes than BFS thanks to the Manhattan Distance heuristic.",
-            "★  BFS guarantees shortest path but explores entire frontier level-by-level.",
-            "★  DFS reaches a path quickly but it is NOT optimal (may be much longer).",
-            "★  Time Complexity: BFS = O(b^d)  |  DFS = O(b^m)  |  A* ≈ O(b^d) guided.",
+            "*  A* expands far fewer nodes than BFS thanks to the Manhattan Distance heuristic.",
+            "*  BFS guarantees shortest path but explores entire frontier level-by-level.",
+            "*  DFS reaches a path quickly but it is NOT optimal (may be much longer).",
+            "*  Time Complexity: BFS = O(b^d)  |  DFS = O(b^m)  |  A* ~ O(b^d) guided.",
         ]
         for note in notes:
             draw_text(screen, note, 70, y, size=14, color=(170, 190, 220))
@@ -377,6 +377,9 @@ def comparison_screen(screen, clock, maze,
                   size=16, color=(130, 150, 200), center=True)
 
         pygame.display.flip()
+        await asyncio.sleep(0)   # yield to the browser event loop (pygbag)
+
+    return True
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -409,10 +412,10 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
     # ── Score & Lives ──────────────────────────────────────────────────────
     draw_text(surface, f"Score  : {pacman.score}", px, y, size=18, color=COLORS["ui_accent"])
     y += 28
-    lives_str = "♥ " * pacman.lives + "♡ " * max(0, 3 - pacman.lives)
+    lives_str = "O " * pacman.lives + "- " * max(0, 3 - pacman.lives)
     draw_text(surface, f"Lives  : {lives_str}", px, y, size=17, color=(220, 60, 60))
     y += 28
-    mode_str = "🤖 A* Agent" if not pacman.manual_mode else "🕹 Manual"
+    mode_str = "A* Agent" if not pacman.manual_mode else "Manual"
     draw_text(surface, f"Mode   : {mode_str}", px, y, size=16, color=COLORS["ui_text"])
     y += 36
 
@@ -421,17 +424,17 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
 
     # ── A* Metrics ────────────────────────────────────────────────────────
     m = pacman.metrics
-    draw_text(surface, "── A* Search Stats ──", px, y, size=15,
+    draw_text(surface, "-- A* Search Stats --", px, y, size=15,
               color=COLORS["ui_highlight"], bold=True)
     y += 26
 
     metrics_rows = [
         ("Algorithm"   , m.algorithm),
         ("Nodes Expl." , str(m.nodes_explored)),
-        ("Path Steps"  , str(m.path_length)),
+        ("Path Cells"  , str(m.path_length)),
         ("Path Cost"   , str(m.path_cost)),
         ("Exec. Time"  , format_time(m.execution_time)),
-        ("Path Found"  , "Yes ✓" if m.path_found else "No ✗"),
+        ("Path Found"  , "Yes" if m.path_found else "No"),
     ]
     for label, val in metrics_rows:
         draw_text(surface, f"{label:<13}: {val}", px, y,
@@ -443,7 +446,7 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
     y += 12
 
     # ── Whole-run summary ────────────────────────────────────────────────
-    draw_text(surface, "── Game Summary ──", px, y, size=15,
+    draw_text(surface, "-- Game Summary --", px, y, size=15,
               color=COLORS["ui_highlight"], bold=True)
     y += 24
 
@@ -456,7 +459,7 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
     y += 12
 
     # ── Ghost status ──────────────────────────────────────────────────────
-    draw_text(surface, "── Ghost Status ──", px, y, size=15,
+    draw_text(surface, "-- Ghost Status --", px, y, size=15,
               color=COLORS["ui_highlight"], bold=True)
     y += 24
 
@@ -476,7 +479,7 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
     pygame.draw.line(surface, COLORS["ui_panel"], (px, y), (panel_x + PANEL_WIDTH - 16, y), 1)
     y += 12
 
-    ovl_state = "ON ✓" if show_overlay else "OFF"
+    ovl_state = "ON" if show_overlay else "OFF"
     draw_text(surface, f"Overlay : {ovl_state}", px, y, size=14,
               color=(100, 240, 140) if show_overlay else (180, 80, 80))
     y += 28
@@ -485,16 +488,16 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
     y += 12
 
     # ── Controls ──────────────────────────────────────────────────────────
-    draw_text(surface, "── Controls ──", px, y, size=15,
+    draw_text(surface, "-- Controls --", px, y, size=15,
               color=COLORS["ui_highlight"], bold=True)
     y += 22
     controls = [
-        "SPACE  – Toggle AI/Manual",
-        "Arrows – Manual movement",
-        "V      – Toggle overlay",
-        "C      – Compare algorithms",
-        "R      – Restart",
-        "ESC    – Quit",
+        "SPACE  - Toggle AI/Manual",
+        "Arrows - Manual movement",
+        "V      - Toggle overlay",
+        "C      - Compare algorithms",
+        "R      - Restart",
+        "ESC    - Quit",
     ]
     for ctrl in controls:
         draw_text(surface, ctrl, px, y, size=12, color=(140, 155, 190))
@@ -504,7 +507,7 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN GAME LOOP
 # ══════════════════════════════════════════════════════════════════════════════
-def run_game(seed: int | None = None):
+async def run_game(seed: int | None = None):
     """Open the window, show the start screen, then play until the user quits."""
     # ── Initialise Pygame ─────────────────────────────────────────────────
     pygame.init()
@@ -519,7 +522,11 @@ def run_game(seed: int | None = None):
     clock   = pygame.time.Clock()
 
     # ── Show start screen ─────────────────────────────────────────────────
-    difficulty, ai_mode = start_screen(screen, clock, maze_w, maze_h)
+    choice = await start_screen(screen, clock, maze_w, maze_h)
+    if choice is None:
+        pygame.quit()
+        return
+    difficulty, ai_mode = choice
     game = Game(difficulty, ai_mode, seed=seed)
     game_started_at = time.perf_counter()
 
@@ -560,8 +567,8 @@ def run_game(seed: int | None = None):
                         goal = nearest_reachable(
                             maze, start, maze.pellets | maze.power_pellets)
                         if goal is not None:
-                            comparison_screen(screen, clock, maze, start, goal,
-                                              total_w, total_h)
+                            running = await comparison_screen(
+                                screen, clock, maze, start, goal, total_w, total_h)
 
                 # Manual movement keys
                 elif event.key in KEY_DIRECTIONS and not game.game_over:
@@ -604,10 +611,11 @@ def run_game(seed: int | None = None):
                    maze.pixel_width, maze.pixel_height, elapsed_seconds)
 
         pygame.display.flip()
+        await asyncio.sleep(0)   # yield to the browser event loop (pygbag)
 
         # ── Game-over screen ──────────────────────────────────────────────
         if game.finished:
-            replay = end_screen(screen, clock, game.won, pacman, total_w, total_h,
+            replay = await end_screen(screen, clock, game.won, pacman, total_w, total_h,
                                 elapsed_seconds)
             if replay:
                 game.restart()
@@ -622,4 +630,4 @@ def run_game(seed: int | None = None):
 #  ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    run_game()
+    asyncio.run(run_game())

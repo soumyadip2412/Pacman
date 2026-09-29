@@ -1,3 +1,5 @@
+> **Note (updated):** this is the original academic write-up. Numbers and design details below were corrected to match the code; the up-to-date results come from `python benchmark.py` and are listed in the [README](../README.md#results).
+
 # Viva Questions & Answers
 ## Intelligent Pac-Man Agent — A* Search Algorithm
 ### AI Academic Assignment
@@ -19,7 +21,7 @@
 
 > - **Time Complexity:** O(b^d) in the worst case (b = branching factor, d = depth of optimal solution). With an effective heuristic, the actual nodes explored is much lower — closer to O(d) in the best case.
 > - **Space Complexity:** O(b^d) — it must keep all generated nodes in memory (both open and closed lists).
-> - In practice for our 21×21 maze, A\* typically explores **60–120 nodes** vs. BFS's **280+ nodes**.
+> - Measured on our 22×21 maze (every pair of the 209 reachable cells), A\* expands **34.4 nodes** on average vs. BFS's **105.5**, and never more than BFS.
 
 ---
 
@@ -45,7 +47,7 @@
 
 **Q5. What happens when two nodes have the same f value in A*?**
 
-> Tie-breaking is done using `g(n)` as a secondary sort key (implemented in our tuple `(f, g, node)`). Preferring the node with **higher g** (i.e., deeper, more committed path) tends to produce more focused exploration toward the goal and avoids unnecessary backtracking.
+> Tie-breaking is done using `g(n)` as a secondary sort key (implemented in our tuple `(f, g, node)`). Because Python compares tuples element by element, on equal `f` the node with the **lower g** is popped first. Pushing `(f, -g, node)` would prefer the deeper node instead, which often expands fewer nodes. Tie-breaking changes the number of expansions, never the optimality of the path.
 
 ---
 
@@ -135,7 +137,7 @@
 > - **Time:** O(b^m) — can be exponential in the maximum depth m
 > - **Space:** O(b·m) — only stores nodes on the current path → **memory efficient**
 >
-> DFS is not optimal because it commits to a deep path without considering alternatives at shallower depths. In our maze, DFS can produce paths **2–3× longer** than optimal.
+> DFS is not optimal because it commits to a deep path without considering alternatives at shallower depths. In our maze, DFS paths are on average **4.6× longer** than optimal (up to 63×), and only 12% of DFS paths are shortest.
 
 ---
 
@@ -202,19 +204,19 @@
 
 **Q20. Define the state space for the Pac-Man problem.**
 
-> - **State:** Tuple `(row, col)` representing Pac-Man's cell in the 21×21 grid
+> - **State:** Tuple `(row, col)` representing Pac-Man's cell in the 22×21 grid
 > - **Initial State:** `(16, 10)` — Pac-Man's spawn position
 > - **Goal State:** `pellets == {} and power_pellets == {}` (all collected)
 > - **Actions:** Move UP(-1,0), DOWN(+1,0), LEFT(0,-1), RIGHT(0,+1)
 > - **Transition Model:** `(r,c)` → `(r+dr, c+dc)` if `(r+dr, c+dc)` is not a wall
 > - **Path Cost:** 1 per action (uniform cost)
-> - **State Space Size:** ~300 reachable non-wall cells
+> - **State Space Size:** 209 reachable cells (221 walkable)
 
 ---
 
 **Q21. What is the branching factor of this maze problem?**
 
-> The branching factor b ≈ 3 (average number of walkable neighbours per cell):
+> The measured average branching factor is b ≈ 2.22 (average number of walkable neighbours per reachable cell):
 > - Corner cells: 2 neighbours
 > - Straight corridor cells: 2 neighbours
 > - Intersection cells: 3–4 neighbours
@@ -237,7 +239,7 @@
 
 > | Criterion | BFS | DFS | A\* |
 > |-----------|-----|-----|-----|
-> | Nodes explored | ~280 | ~200–450 | **~60–120** |
+> | Nodes explored (mean, all pairs) | 105.5 | 105.5 | **34.4** |
 > | Path length | Optimal | Suboptimal | Optimal |
 > | Memory usage | High | **Low** | High |
 > | Execution time | ~0.8 ms | ~0.5 ms | **~0.3 ms** |
