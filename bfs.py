@@ -130,3 +130,46 @@ def bfs_next_step(maze, start: tuple, goal: tuple) -> tuple | None:
                 frontier.append(neighbour)
 
     return None     # unreachable
+
+
+def nearest_reachable(maze, start: tuple, targets: set,
+                      blocked: frozenset = frozenset()) -> tuple | None:
+    """
+    Multi-goal BFS: return the cell in *targets* with the fewest steps
+    from *start*, never entering *blocked* cells. None if none is reachable.
+
+    BFS pops cells in order of distance, so the first target popped is
+    the nearest one. Cost: O(V + E), one search instead of one per target.
+    """
+    frontier = deque([start])
+    visited  = {start}
+
+    while frontier:
+        current = frontier.popleft()
+        if current in targets:
+            return current
+        for neighbour in maze.get_neighbors(*current):
+            if neighbour not in visited and neighbour not in blocked:
+                visited.add(neighbour)
+                frontier.append(neighbour)
+
+    return None
+
+
+def distance_map(maze, sources: list) -> dict:
+    """
+    Multi-source BFS: map every reachable cell to its step distance from
+    the nearest cell in *sources*. Pac-Man uses it with the ghost
+    positions to find the danger zone and the safest escape move.
+    """
+    dist     = {s: 0 for s in sources}
+    frontier = deque(sources)
+
+    while frontier:
+        current = frontier.popleft()
+        for neighbour in maze.get_neighbors(*current):
+            if neighbour not in dist:
+                dist[neighbour] = dist[current] + 1
+                frontier.append(neighbour)
+
+    return dist

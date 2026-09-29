@@ -19,8 +19,8 @@ AGENT ARCHITECTURE:
     │                                                     │
     │  AGENT FUNCTION: f(percept) → action               │
     │   1. Plan path to nearest pellet via A*             │
-    │   2. Detect if ghost is on current planned path     │
-    │   3. If danger detected → replan (avoid ghost)      │
+    │   2. Plan around cells near ghosts (danger zone)    │
+    │   3. Ghost nearby → replan; trapped → flee          │
     │   4. Follow path step-by-step                       │
     └─────────────────────────────────────────────────────┘
 
@@ -32,6 +32,7 @@ import pygame
 import math
 import time
 from astar import astar_to_nearest_pellet, astar_search
+from bfs   import distance_map
 from utils  import manhattan_distance, AlgorithmMetrics, COLORS
 
 CELL_SIZE          = 28
@@ -39,6 +40,7 @@ MOVE_SPEED         = 6          # pixels per frame (animation interpolation)
 REPLAN_TICKS       = 15         # re-run A* every N game ticks (performance)
 PACMAN_MOVE_DELAY  = 4          # ticks between each Pac-Man move (higher = slower)
 DANGER_DIST  = 4          # cells – ghost closer than this triggers replanning
+DANGER_RADIUS = 2         # steps – cells this close to a ghost are avoided
 
 
 class PacMan:
@@ -137,28 +139,32 @@ class PacMan:
 
     # ── Planning (A* Search) ──────────────────────────────────────────────────
 
-    def plan(self, ghost_positions: list):
+    def plan(self, percept: dict):
         """
-        Re-run A* to find the optimal path to the nearest pellet.
+        Re-run A* to find a safe path to the nearest pellet.
 
         The agent replans when:
         - The current path is exhausted
-        - A ghost is dangerously close to the planned path
+        - A ghost is within DANGER_DIST cells (Manhattan)
         - A fixed number of ticks have elapsed (periodic replanning)
 
         GHOST AVOIDANCE:
-        If a ghost is within DANGER_DIST cells, the agent removes that
-        cell from the accessible area by temporarily marking it and
-        replanning. (Simple reactive layer on top of deliberative A*.)
+        Every cell within DANGER_RADIUS steps of a non-frightened ghost is
+        treated as a wall for this plan, so both the target choice and the
+        A* path route around ghosts. If no pellet can be reached safely,
+        the agent flees: it steps to the neighbouring cell that is furthest
+        (by maze distance) from the nearest ghost.
         """
-        all_pellets = self.maze.pellets | self.maze.power_pellets
-        if not all_pellets:
+        pellets = percept["pellets"]
+        if not pellets:
             return   # nothing to plan for
+
+        pos    = percept["position"]
+        ghosts = percept["ghost_positions"]
 
         # Danger check – is any ghost within DANGER_DIST of current position?
         danger = any(
-            manhattan_distance((self.row, self.col), gpos) <= DANGER_DIST
-            for gpos in ghost_positions
+            manhattan_distance(pos, gpos) <= DANGER_DIST for gpos in ghosts
         )
 
         should_replan = (
@@ -172,12 +178,26 @@ class PacMan:
 
         self.ticks_since_replan = 0
 
-        # Run A* to nearest pellet
-        path, explored, metrics, target = astar_to_nearest_pellet(
-            self.maze, (self.row, self.col), all_pellets
+        # Danger zone: cells close to a ghost by maze distance (never our own
+        # cell, so the search can always start)
+        ghost_dist = distance_map(self.maze, ghosts) if ghosts else {}
+        blocked = frozenset(
+            cell for cell, d in ghost_dist.items()
+            if d <= DANGER_RADIUS and cell != pos
         )
 
-        self.path           = path[1:] if path else []  # strip start node
+        # Run A* to the nearest pellet that can be reached safely
+        path, explored, metrics, target = astar_to_nearest_pellet(
+            self.maze, pos, pellets, blocked
+        )
+
+        if path:
+            self.path = path[1:]            # strip start node
+        elif ghost_dist:
+            self.path = self._flee_step(pos, ghost_dist)
+        else:
+            self.path = []
+
         self.target_pellet  = target
         self.explored_nodes = explored
         self.metrics        = metrics
@@ -187,11 +207,20 @@ class PacMan:
         self.total_nodes_explored += metrics.nodes_explored
         self.total_search_time    += metrics.execution_time
 
+    def _flee_step(self, pos: tuple, ghost_dist: dict) -> list:
+        """Return a one-step path to the neighbour furthest from any ghost."""
+        options = self.maze.get_neighbors(*pos) + [pos]
+        best = max(options, key=lambda c: ghost_dist.get(c, float('inf')))
+        return [] if best == pos else [best]
+
     # ── Action ────────────────────────────────────────────────────────────────
 
     def act(self, ghost_positions: list):
         """
         Decide and take the next step along the planned path.
+
+        *ghost_positions* should hold only ghosts that can catch Pac-Man
+        (frightened ghosts are not a threat and are left out by the caller).
 
         In autonomous (AI) mode: follow A* path.
         In manual mode: follow player input direction if walkable.
@@ -207,7 +236,7 @@ class PacMan:
             return
 
         if not self.manual_mode:
-            self.plan(ghost_positions)
+            self.plan(self.perceive(ghost_positions))
             self._follow_path()
         else:
             self._follow_manual()

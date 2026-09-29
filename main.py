@@ -603,8 +603,8 @@ def run_game(difficulty: str = "Medium", start_ai: bool = True):
         if not game_over and death_pause == 0:
             ghost_pos_list = [(g.row, g.col) for g in ghosts]
 
-            # Pac-Man act
-            pacman.act(ghost_pos_list)
+            # Pac-Man act (only non-frightened ghosts are threats)
+            pacman.act([(g.row, g.col) for g in ghosts if not g.frightened])
             pacman.update_power()
 
             # Ghosts act

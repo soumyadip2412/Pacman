@@ -29,17 +29,21 @@ COMPARISON WITH OTHER ALGORITHMS:
 import heapq
 import time
 from utils import manhattan_distance, reconstruct_path, AlgorithmMetrics
+from bfs   import nearest_reachable
 
 
-def astar_search(maze, start: tuple, goal: tuple) -> tuple:
+def astar_search(maze, start: tuple, goal: tuple,
+                 blocked: frozenset = frozenset()) -> tuple:
     """
     Run A* search from *start* to *goal* on the given *maze*.
 
     Parameters
     ----------
-    maze  : Maze object  (provides get_neighbors and is_wall)
-    start : (row, col)   – initial state
-    goal  : (row, col)   – goal state
+    maze    : Maze object  (provides get_neighbors and is_wall)
+    start   : (row, col)   – initial state
+    goal    : (row, col)   – goal state
+    blocked : set of (row, col) – extra cells treated as walls for this
+              search (Pac-Man passes the danger zone around ghosts)
 
     Returns
     -------
@@ -51,7 +55,7 @@ def astar_search(maze, start: tuple, goal: tuple) -> tuple:
 
     # ── Data structures ──────────────────────────────────────────────────
     # Open list (min-heap): entries are (f_score, g_score, node)
-    # Using g_score as a tie-breaker so equal-f nodes are explored in FIFO order.
+    # On equal f, heapq compares g next, so the node with the LOWER g is popped first.
     open_heap = []
     heapq.heappush(open_heap, (0 + manhattan_distance(start, goal), 0, start))
 
@@ -92,7 +96,7 @@ def astar_search(maze, start: tuple, goal: tuple) -> tuple:
 
         # ── EXPAND NODE (generate successors) ────────────────────────────
         for neighbour in maze.get_neighbors(*current):
-            if neighbour in explored:
+            if neighbour in explored or neighbour in blocked:
                 continue
 
             tentative_g = g + 1     # unit step cost
@@ -118,33 +122,36 @@ def astar_search(maze, start: tuple, goal: tuple) -> tuple:
     return [], explored, metrics
 
 
-def astar_to_nearest_pellet(maze, start: tuple, pellets: set) -> tuple:
+def astar_to_nearest_pellet(maze, start: tuple, pellets: set,
+                            blocked: frozenset = frozenset()) -> tuple:
     """
-    Run A* to find the nearest (lowest f-cost) pellet from *start*.
+    Plan a path from *start* to the pellet that is nearest by maze distance.
 
-    This is used by the Pac-Man agent to decide which pellet to target next.
-    Among all pellets, we run A* to each and return the one with
-    the lowest total path cost (optimal nearest-pellet strategy).
+    Two stages:
+      1. Target selection – one multi-goal BFS from *start* stops at the
+         first pellet it reaches, which is the truly nearest one by path
+         length (a Manhattan pick can be several steps further away).
+      2. Path planning   – A* from *start* to that pellet.
+    Both stages treat *blocked* cells (the danger zone around ghosts) as
+    walls, so the chosen pellet is the nearest one reachable safely.
 
     Parameters
     ----------
     maze    : Maze object
     start   : (row, col) – Pac-Man's current position
     pellets : set of (row, col) – remaining pellets (normal + power)
+    blocked : set of (row, col) – cells to avoid
 
     Returns
     -------
-    best_path    : list[(row, col)]
+    best_path    : list[(row, col)]  (empty if no pellet is reachable)
     explored     : set[(row, col)]
     metrics      : AlgorithmMetrics
     best_goal    : (row, col) | None
     """
-    if not pellets:
+    target = nearest_reachable(maze, start, pellets, blocked)
+    if target is None:
         return [], set(), AlgorithmMetrics(algorithm="A*"), None
 
-    # Heuristic: go to the pellet with the smallest Manhattan distance first
-    # (greedy pre-selection to avoid running A* to every single pellet)
-    candidate = min(pellets, key=lambda p: manhattan_distance(start, p))
-
-    path, explored, metrics = astar_search(maze, start, candidate)
-    return path, explored, metrics, candidate
+    path, explored, metrics = astar_search(maze, start, target, blocked)
+    return path, explored, metrics, target
