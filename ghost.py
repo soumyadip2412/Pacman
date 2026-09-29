@@ -58,12 +58,15 @@ class Ghost:
     spawn       : (row, col) – starting position
     use_astar   : bool – True = A*, False = BFS for movement
     move_delay  : int  – ticks between each move (controls speed)
+    rng         : random.Random – source for frightened moves (seed it to
+                  make games reproducible)
     """
 
     def __init__(self, maze, personality: str,
                  spawn: tuple, use_astar: bool = False,
-                 move_delay: int = 10):
+                 move_delay: int = 10, rng: random.Random | None = None):
         self.maze        = maze
+        self.rng         = rng or random.Random()   # frightened random walk
         self.name        = personality
         self.color       = GHOST_COLORS.get(personality, (200, 200, 200))
         self.row, self.col = spawn
@@ -99,7 +102,7 @@ class Ghost:
         if self.frightened:
             # Random walk when frightened
             neighbours = self.maze.get_neighbors(self.row, self.col)
-            return random.choice(neighbours) if neighbours else (self.row, self.col)
+            return self.rng.choice(neighbours) if neighbours else (self.row, self.col)
 
         if self.mode == 'scatter':
             return SCATTER_CORNERS.get(self.name, (1, 1))
@@ -156,9 +159,11 @@ class Ghost:
         # Scatter / Chase alternation
         if not self.frightened:
             if self.mode == 'chase'   and self.mode_timer >= CHASE_TICKS:
-                self.mode = 'scatter'; self.mode_timer = 0
+                self.mode = 'scatter'
+                self.mode_timer = 0
             elif self.mode == 'scatter' and self.mode_timer >= SCATTER_TICKS:
-                self.mode = 'chase';   self.mode_timer = 0
+                self.mode = 'chase'
+                self.mode_timer = 0
 
         # Only move on delay ticks
         if self.tick_count % self.move_delay != 0:

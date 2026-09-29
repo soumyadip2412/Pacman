@@ -1,5 +1,4 @@
 from pptx import Presentation
-from pptx.util import Inches, Pt
 
 slides = [
     ("Intelligent Pac-Man Agent Using A* Search Algorithm", "Student Name \nGuide: [Guide Name] \nDepartment of CSE"),

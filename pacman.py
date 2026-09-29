@@ -30,10 +30,9 @@ DECISION CYCLE (per game tick):
 
 import pygame
 import math
-import time
-from astar import astar_to_nearest_pellet, astar_search
+from astar import astar_to_nearest_pellet
 from bfs   import distance_map
-from utils  import manhattan_distance, AlgorithmMetrics, COLORS
+from utils  import manhattan_distance, AlgorithmMetrics
 
 CELL_SIZE          = 28
 MOVE_SPEED         = 6          # pixels per frame (animation interpolation)
@@ -312,18 +311,7 @@ class PacMan:
 
         body_color = (255, 220, 0) if not self.powered else (0, 220, 255)
 
-        # Body (pie slice = full circle minus mouth gap)
-        start_a = math.radians(angle + self.mouth_angle)
-        end_a   = math.radians(angle - self.mouth_angle)
-        points  = [(cx, cy)]
-        steps   = 30
-        for i in range(steps + 1):
-            t = i / steps
-            a = start_a + t * (2 * math.pi - 2 * math.radians(self.mouth_angle) * 2)
-            # Wrap properly
-        # Use pygame arc + filled polygon instead
-        rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
-        # Draw filled yellow circle
+        # Draw filled body circle
         pygame.draw.circle(surface, body_color, (cx, cy), radius)
         # Draw black "mouth" triangle
         mouth_rad = math.radians(self.mouth_angle)
@@ -346,17 +334,20 @@ class PacMan:
 
         # Power glow ring
         if self.powered:
-            glow_alpha = abs(math.sin(tick * 0.15)) * 180 + 50
             pygame.draw.circle(surface, (0, 180, 255),
                                (cx, cy), radius + 5, 2)
 
     def _facing_angle(self) -> float:
         """Return facing direction in degrees (Pygame coordinate system)."""
         dr, dc = self.direction
-        if dc > 0:  return 0.0    # right
-        if dc < 0:  return 180.0  # left
-        if dr < 0:  return 90.0   # up   (screen y inverted)
-        if dr > 0:  return 270.0  # down
+        if dc > 0:
+            return 0.0      # right
+        if dc < 0:
+            return 180.0    # left
+        if dr < 0:
+            return 90.0     # up   (screen y inverted)
+        if dr > 0:
+            return 270.0    # down
         return 0.0
 
     def _draw_death(self, surface, cx, cy, radius):
@@ -367,7 +358,6 @@ class PacMan:
         if angle < 90:
             # Draw shrinking mouth gap
             mouth_rad = math.radians(90 - angle)
-            facing    = math.radians(0)
             p1 = (cx, cy)
             p2 = (int(cx + radius * 1.1 * math.cos(mouth_rad)),
                   int(cy - radius * 1.1 * math.sin(mouth_rad)))
@@ -376,22 +366,6 @@ class PacMan:
             pygame.draw.polygon(surface, (10, 10, 20), [p1, p2, p3])
 
     # ── Input handling ────────────────────────────────────────────────────────
-
-    def handle_key(self, key):
-        """Allow manual player control via arrow keys."""
-        key_map = {
-            pygame.K_UP    : (-1,  0),
-            pygame.K_DOWN  : ( 1,  0),
-            pygame.K_LEFT  : ( 0, -1),
-            pygame.K_RIGHT : ( 0,  1),
-            pygame.K_w     : (-1,  0),
-            pygame.K_s     : ( 1,  0),
-            pygame.K_a     : ( 0, -1),
-            pygame.K_d     : ( 0,  1),
-        }
-        if key in key_map:
-            self.manual_dir  = key_map[key]
-            self.manual_mode = True
 
     def record_ghost_eaten(self):
         """Record a ghost being eaten during the current game run."""
