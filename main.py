@@ -615,18 +615,22 @@ def run_game(difficulty: str = "Medium", start_ai: bool = True):
 
             for g in ghosts:
                 g.update(pacman.row, pacman.col, pac_dir)
-                if pacman.powered and g.frightened is False:
-                    pass   # ghost is normal
 
-            # Power-pellet activation
-            if pacman.powered:
+            # Power-pellet activation: frighten ghosts once, on the tick the
+            # pellet is eaten (not every powered tick, which would re-frighten
+            # ghosts that were just eaten and respawned)
+            if pacman.power_just_activated:
+                pacman.power_just_activated = False
                 for g in ghosts:
-                    if not g.frightened:
-                        g.frighten(200)
+                    g.frighten(200)
 
             # ── Collision detection ───────────────────────────────────────
-            for g in ghosts:
-                if g.row == pacman.row and g.col == pacman.col:
+            # A ghost touches Pac-Man if they share a cell now, or if Pac-Man
+            # moved into the cell the ghost occupied before it moved (this
+            # also catches the two swapping cells and passing through)
+            pac_pos = (pacman.row, pacman.col)
+            for g, g_prev in zip(ghosts, ghost_pos_list):
+                if (g.row, g.col) == pac_pos or g_prev == pac_pos:
                     if g.frightened:
                         # Pac-Man eats ghost
                         g.reset(maze.ghost_starts[ghosts.index(g)
@@ -641,6 +645,7 @@ def run_game(difficulty: str = "Medium", start_ai: bool = True):
                         death_pause  = FPS * 2    # 2-second pause
                         if pacman.lives <= 0:
                             game_over = True
+                        break   # at most one life lost per tick
 
             # ── Win condition ─────────────────────────────────────────────
             remaining = len(maze.pellets) + len(maze.power_pellets)
