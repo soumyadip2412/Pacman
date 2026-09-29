@@ -69,8 +69,8 @@ def manhattan_distance(pos1: tuple, pos2: tuple) -> int:
 def euclidean_distance(pos1: tuple, pos2: tuple) -> float:
     """
     Euclidean Distance – provided for comparison purposes.
-    NOT used as the primary heuristic because it can overestimate
-    for 4-directional grids when cells are far apart diagonally.
+    Also admissible on a 4-directional grid (it is never larger than the
+    Manhattan distance), but less informed, so A* would expand more nodes.
     """
     return ((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2) ** 0.5
 
@@ -113,10 +113,11 @@ class AlgorithmMetrics:
     ----------
     algorithm     : name of the algorithm ('A*', 'BFS', 'DFS')
     nodes_explored: number of nodes popped from the frontier
-    path_length   : number of steps in the solution path (0 if no path)
+    path_length   : number of cells in the solution path, start and goal included
+                    (0 if no path); the number of moves is path_cost
     execution_time: wall-clock time in seconds
     path_found    : whether a solution was found
-    path_cost     : sum of edge costs along the path (= path_length for unit cost)
+    path_cost     : sum of edge costs along the path (= path_length - 1 for unit cost)
     """
     algorithm      : str   = "Unknown"
     nodes_explored : int   = 0
@@ -130,7 +131,7 @@ class AlgorithmMetrics:
         return (
             f"[{self.algorithm}] {status} | "
             f"Nodes: {self.nodes_explored} | "
-            f"Path: {self.path_length} steps | "
+            f"Path: {self.path_length} cells | "
             f"Cost: {self.path_cost} | "
             f"Time: {self.execution_time*1000:.2f} ms"
         )

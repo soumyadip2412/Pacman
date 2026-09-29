@@ -1,3 +1,5 @@
+> **Note (updated):** this is the original academic write-up. Numbers and design details below were corrected to match the code; the up-to-date results come from `python benchmark.py` and are listed in the [README](../README.md#results).
+
 # AI Project Report Outline
 ## Intelligent Pac-Man Agent Using A* Search Algorithm
 
@@ -71,7 +73,7 @@
 - **Actions:** {UP, DOWN, LEFT, RIGHT}
 - **Transition Model:** Move to adjacent non-wall cell
 - **Path Cost:** 1 per step (uniform cost)
-- **State Space Size:** 21 × 21 grid = 441 cells (approx. 300 walkable)
+- **State Space Size:** 22 × 21 grid = 462 cells (221 walkable, 209 reachable)
 
 ### 3.3 Maze Environment
 - 21 × 21 grid
@@ -182,14 +184,14 @@ perceive() → plan() → act()
 
 | Metric | BFS | DFS | A\* |
 |--------|-----|-----|-----|
-| Nodes Explored | ~280 | ~200–450 | ~60–120 |
+| Nodes Explored (mean, all pairs) | 105.5 | 105.5 | 34.4 |
 | Path Length (steps) | Optimal | Suboptimal | Optimal |
 | Execution Time (ms) | ~0.8 ms | ~0.5 ms | ~0.3 ms |
 | Path Optimality | ✅ | ❌ | ✅ |
 
 ### 6.2 Observations
 - A\* explores **3–5× fewer nodes** than BFS due to heuristic guidance
-- DFS finds paths that can be **2–3× longer** than optimal
+- DFS paths are on average **4.6× longer** than optimal (up to 63×)
 - Execution times are all sub-millisecond on a standard laptop
 - A\* provides the best balance of speed + optimality for this domain
 
@@ -218,7 +220,7 @@ perceive() → plan() → act()
 - BFS and DFS serve as useful baselines to demonstrate A\*'s advantage
 
 ### 8.2 Limitations
-- Ghost avoidance is reactive (proximity check), not predictive
+- Ghost avoidance treats cells within 2 steps of a ghost as walls; it uses distance only, not the ghost's direction
 - DFS path quality depends on neighbour expansion order
 - Single-level maze (extension: multi-level possible)
 

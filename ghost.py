@@ -3,16 +3,18 @@ ghost.py - Ghost Agent Module
 ================================
 Implements ghost enemies with multiple AI behaviour modes.
 
-GHOST AGENT TYPE: Utility-Based / Reactive Agent
--------------------------------------------------
-Each ghost perceives Pac-Man's position and acts to minimise the
-distance to Pac-Man (maximise threat / minimise utility for Pac-Man).
+GHOST AGENT TYPE: Goal-Based Agent with a mode state machine
+-------------------------------------------------------------
+Each ghost picks a target cell from its personality and current mode
+(chase / scatter / frightened), then takes the next step of a BFS or A*
+path toward it.
 
 GHOST BEHAVIOURS (difficulty-configurable):
     BLINKY (Red)  – Pure BFS chaser: always pursues Pac-Man directly.
     PINKY  (Pink) – A* chaser: targets 4 cells AHEAD of Pac-Man.
-    INKY   (Cyan) – A* chaser with scatter/chase mode alternation.
-    CLYDE  (Orange)– BFS but retreats when closer than 8 cells.
+    INKY   (Cyan) – A* chaser: targets Pac-Man directly (like Blinky).
+    CLYDE  (Orange)– BFS but retreats when within 8 cells.
+    All ghosts alternate CHASE_TICKS of chase with SCATTER_TICKS of scatter.
 
 SEARCH ALGORITHM USED:
     BFS (Blinky, Clyde) or A* (Pinky, Inky) to compute next step.
@@ -95,7 +97,7 @@ class Ghost:
 
         BLINKY : targets Pac-Man's exact position (direct chase)
         PINKY  : targets 4 cells AHEAD of Pac-Man (ambush)
-        INKY   : alternates scatter / chase
+        INKY   : targets Pac-Man's exact position (A* instead of BFS)
         CLYDE  : chases when far (>8), scatters when close
         SCATTER: each ghost retreats to its home corner
         """
