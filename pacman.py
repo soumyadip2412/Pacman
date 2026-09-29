@@ -102,6 +102,7 @@ class PacMan:
         self.lives    = 3
         self.powered  = False   # power-pellet mode
         self.power_timer = 0
+        self.power_just_activated = False  # set on the tick a power pellet is eaten
 
         # Animation
         self.mouth_angle = 45
@@ -249,6 +250,7 @@ class PacMan:
             self.score += 50
             self.powered     = True
             self.power_timer = 200   # ticks of power mode
+            self.power_just_activated = True
             self.total_power_pellets_collected += 1
 
     def update_power(self):
@@ -381,5 +383,6 @@ class PacMan:
         self.death_frame    = 0
         self.powered        = False
         self.power_timer    = 0
+        self.power_just_activated = False
         self.manual_mode    = False
         self.ticks_since_replan = REPLAN_TICKS
