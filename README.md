@@ -7,8 +7,6 @@
 
 A Pac-Man game in Python and Pygame where Pac-Man plays itself. It plans with **A\*** search, routes around ghosts, and always heads for the pellet that is nearest by maze distance. Four ghost agents chase it using BFS and A\*. The game draws each search live (the nodes A\* expanded and the path it chose), and a comparison screen runs **A\*, BFS and DFS** on the same route.
 
-![Gameplay: Pac-Man plans with A* (green path) while ghosts chase it](docs/gameplay.gif)
-
 ## Results
 
 All numbers come from `python benchmark.py` (headless, seeded, about 30 seconds).
