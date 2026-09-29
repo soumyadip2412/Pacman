@@ -15,8 +15,7 @@ HEURISTIC FUNCTION (for A*):
 """
 
 import time
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 # ── Direction vectors ─────────────────────────────────────────────────────────
 UP    = (-1,  0)

@@ -5,7 +5,8 @@ Intelligent Pac-Man Agent Using A* Search Algorithm
 Academic Assignment - Artificial Intelligence
 
 MODULES OVERVIEW:
-    main.py   – Game loop, screens, UI rendering, event handling
+    main.py   – Window, screens, UI rendering, event handling
+    game.py   – Game state and rules, advanced one tick at a time (no drawing)
     maze.py   – Grid environment: walls, pellets, state space
     pacman.py – Goal-based intelligent agent (A* planner)
     ghost.py  – Ghost agents (BFS / A* chasers, 4 personalities)
@@ -28,24 +29,21 @@ import math
 import time
 import pygame
 
-from maze   import Maze, CELL_SIZE
-from pacman import PacMan
-from ghost  import Ghost
+from maze   import CELL_SIZE, ROWS, COLS
+from game   import Game, FPS, DIFFICULTIES
 from astar  import astar_search
-from bfs    import bfs_search
+from bfs    import bfs_search, nearest_reachable
 from dfs    import dfs_search
-from utils  import COLORS, AlgorithmMetrics, format_time, manhattan_distance
+from utils  import COLORS, format_time, UP, DOWN, LEFT, RIGHT
 
-# ── Window / game constants ────────────────────────────────────────────────────
-FPS          = 30
+# ── Window / UI constants ─────────────────────────────────────────────────────
 PANEL_WIDTH  = 320      # right-side info panel width
 TITLE        = "Intelligent Pac-Man  |  A* Search Agent"
 
-# Difficulty presets: (ghost_move_delay, label)
-DIFFICULTIES = {
-    "Easy"   : 14,
-    "Medium" : 10,
-    "Hard"   :  6,
+# Keyboard → movement direction (arrow keys and WASD)
+KEY_DIRECTIONS = {
+    pygame.K_UP: UP,   pygame.K_DOWN: DOWN,  pygame.K_LEFT: LEFT,  pygame.K_RIGHT: RIGHT,
+    pygame.K_w:  UP,   pygame.K_s:    DOWN,  pygame.K_a:    LEFT,  pygame.K_d:     RIGHT,
 }
 
 
@@ -136,12 +134,14 @@ def start_screen(screen, clock, maze_w: int, maze_h: int) -> tuple[str, bool]:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     return difficulty_keys[diff_idx], ai_mode
                 if event.key == pygame.K_ESCAPE:
-                    pygame.quit(); sys.exit()
+                    pygame.quit()
+                    sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if buttons["start"].collidepoint(mx, my):
                     return difficulty_keys[diff_idx], ai_mode
@@ -315,7 +315,8 @@ def comparison_screen(screen, clock, maze,
         clock.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
                 waiting = False
 
@@ -330,7 +331,7 @@ def comparison_screen(screen, clock, maze,
         headers = ["Algorithm", "Nodes Explored", "Path Length", "Path Cost", "Time (ms)", "Optimal?"]
         col_xs  = [80, 240, 400, 530, 660, 790]
         y       = 130
-        for hdr, cx in zip(headers, col_xs):
+        for hdr, cx in zip(headers, col_xs, strict=True):
             draw_text(screen, hdr, cx, y, size=15, color=COLORS["ui_accent"], bold=True)
 
         # Divider
@@ -355,7 +356,7 @@ def comparison_screen(screen, clock, maze,
                 f"{m.execution_time * 1000:.2f}",
                 optimal_map[alg],
             ]
-            for val, cx in zip(row_data, col_xs):
+            for val, cx in zip(row_data, col_xs, strict=True):
                 draw_text(screen, val, cx, y, size=17, color=col)
             y += 36
 
@@ -503,63 +504,34 @@ def draw_panel(surface, pacman, ghosts, tick: int, show_overlay: bool,
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN GAME LOOP
 # ══════════════════════════════════════════════════════════════════════════════
-def run_game(difficulty: str = "Medium", start_ai: bool = True):
+def run_game(seed: int | None = None):
+    """Open the window, show the start screen, then play until the user quits."""
     # ── Initialise Pygame ─────────────────────────────────────────────────
     pygame.init()
     pygame.display.set_caption(TITLE)
+    _fonts.clear()      # fonts from an earlier pygame session are invalid now
 
-    maze = Maze()
-    move_delay = DIFFICULTIES.get(difficulty, 10)
-
-    total_w = maze.pixel_width  + PANEL_WIDTH
-    total_h = maze.pixel_height
+    maze_w = COLS * CELL_SIZE
+    maze_h = ROWS * CELL_SIZE
+    total_w = maze_w + PANEL_WIDTH
+    total_h = maze_h
     screen  = pygame.display.set_mode((total_w, total_h))
     clock   = pygame.time.Clock()
 
     # ── Show start screen ─────────────────────────────────────────────────
-    difficulty, ai_mode = start_screen(screen, clock, maze.pixel_width, maze.pixel_height)
-    move_delay = DIFFICULTIES.get(difficulty, 10)
+    difficulty, ai_mode = start_screen(screen, clock, maze_w, maze_h)
+    game = Game(difficulty, ai_mode, seed=seed)
     game_started_at = time.perf_counter()
 
-    # ── Create agents ─────────────────────────────────────────────────────
-    def make_agents():
-        nonlocal maze
-        maze = Maze()    # fresh maze each restart
-
-        pm = PacMan(maze)
-        pm.manual_mode = not ai_mode
-
-        ghost_defs = [
-            ("blinky", False, move_delay - 2),
-            ("pinky",  True,  move_delay),
-            ("inky",   True,  move_delay + 1),
-            ("clyde",  False, move_delay - 1),
-        ]
-        gs = []
-        spawns = maze.ghost_starts
-        for i, (name, use_astar, delay) in enumerate(ghost_defs):
-            spawn = spawns[i % len(spawns)]
-            gs.append(Ghost(maze, name, spawn, use_astar=use_astar,
-                            move_delay=delay))
-        return pm, gs
-
-    pacman, ghosts = make_agents()
-
-    # ── State ─────────────────────────────────────────────────────────────
-    show_overlay  = True
-    game_over     = False
-    won           = False
-    tick          = 0
-    death_pause   = 0       # ticks to wait after Pac-Man dies
+    show_overlay = True
 
     # Create maze surface (redrawn each frame)
-    maze_surf = pygame.Surface((maze.pixel_width, maze.pixel_height))
+    maze_surf = pygame.Surface((maze_w, maze_h))
 
     # ── Game loop ─────────────────────────────────────────────────────────
     running = True
     while running:
         clock.tick(FPS)
-        tick += 1
 
         # ── Events ────────────────────────────────────────────────────────
         for event in pygame.event.get():
@@ -571,95 +543,38 @@ def run_game(difficulty: str = "Medium", start_ai: bool = True):
                     running = False
 
                 elif event.key == pygame.K_r:
-                    pacman, ghosts = make_agents()
-                    game_over = won = False
-                    tick = 0; death_pause = 0
+                    game.restart()
+                    game_started_at = time.perf_counter()
 
                 elif event.key == pygame.K_SPACE:
-                    pacman.manual_mode = not pacman.manual_mode
+                    game.toggle_ai()
 
                 elif event.key == pygame.K_v:
                     show_overlay = not show_overlay
 
                 elif event.key == pygame.K_c:
-                    if not game_over:
-                        all_pellets = maze.pellets | maze.power_pellets
-                        if all_pellets:
-                            goal = min(all_pellets,
-                                       key=lambda p: manhattan_distance(
-                                           (pacman.row, pacman.col), p))
-                            comparison_screen(screen, clock, maze,
-                                              (pacman.row, pacman.col),
-                                              goal, total_w, total_h)
+                    if not game.game_over:
+                        maze = game.maze
+                        start = (game.pacman.row, game.pacman.col)
+                        # Same target the agent uses: nearest pellet by path
+                        goal = nearest_reachable(
+                            maze, start, maze.pellets | maze.power_pellets)
+                        if goal is not None:
+                            comparison_screen(screen, clock, maze, start, goal,
+                                              total_w, total_h)
 
                 # Manual movement keys
-                elif not game_over:
-                    pacman.handle_key(event.key)
+                elif event.key in KEY_DIRECTIONS and not game.game_over:
+                    game.steer(KEY_DIRECTIONS[event.key])
 
         if not running:
             break
 
         # ── Logic update ──────────────────────────────────────────────────
-        if not game_over and death_pause == 0:
-            ghost_pos_list = [(g.row, g.col) for g in ghosts]
-
-            # Pac-Man act (only non-frightened ghosts are threats)
-            pacman.act([(g.row, g.col) for g in ghosts if not g.frightened])
-            pacman.update_power()
-
-            # Ghosts act
-            pac_dir = (0, 1)
-            if pacman.path:
-                nr, nc = pacman.path[0]
-                pac_dir = (nr - pacman.row, nc - pacman.col)
-
-            for g in ghosts:
-                g.update(pacman.row, pacman.col, pac_dir)
-
-            # Power-pellet activation: frighten ghosts once, on the tick the
-            # pellet is eaten (not every powered tick, which would re-frighten
-            # ghosts that were just eaten and respawned)
-            if pacman.power_just_activated:
-                pacman.power_just_activated = False
-                for g in ghosts:
-                    g.frighten(200)
-
-            # ── Collision detection ───────────────────────────────────────
-            # A ghost touches Pac-Man if they share a cell now, or if Pac-Man
-            # moved into the cell the ghost occupied before it moved (this
-            # also catches the two swapping cells and passing through)
-            pac_pos = (pacman.row, pacman.col)
-            for g, g_prev in zip(ghosts, ghost_pos_list):
-                if (g.row, g.col) == pac_pos or g_prev == pac_pos:
-                    if g.frightened:
-                        # Pac-Man eats ghost
-                        g.reset(maze.ghost_starts[ghosts.index(g)
-                                                   % len(maze.ghost_starts)])
-                        pacman.score += 200
-                        pacman.record_ghost_eaten()
-                    else:
-                        # Ghost catches Pac-Man
-                        pacman.lives -= 1
-                        pacman.record_life_lost()
-                        pacman.dead  = True
-                        death_pause  = FPS * 2    # 2-second pause
-                        if pacman.lives <= 0:
-                            game_over = True
-                        break   # at most one life lost per tick
-
-            # ── Win condition ─────────────────────────────────────────────
-            remaining = len(maze.pellets) + len(maze.power_pellets)
-            if remaining == 0 and not game_over:
-                won = game_over = True
-
-        elif death_pause > 0:
-            death_pause -= 1
-            if death_pause == 0 and pacman.lives > 0:
-                pacman.reset()
-                for i, g in enumerate(ghosts):
-                    g.reset(maze.ghost_starts[i % len(maze.ghost_starts)])
+        game.step()
 
         # ── Rendering ─────────────────────────────────────────────────────
+        maze, pacman, ghosts = game.maze, game.pacman, game.ghosts
         screen.fill(COLORS["dark_blue"])
         elapsed_seconds = time.perf_counter() - game_started_at
 
@@ -674,31 +589,28 @@ def run_game(difficulty: str = "Medium", start_ai: bool = True):
 
         # Ghosts
         for g in ghosts:
-            g.draw(screen, tick)
+            g.draw(screen, game.tick)
 
         # Pac-Man
-        pacman.draw(screen, tick)
+        pacman.draw(screen, game.tick)
 
         # Remaining pellet count on maze
-        remaining_count = len(maze.pellets) + len(maze.power_pellets)
-        draw_text(screen, f"Pellets left: {remaining_count}",
+        draw_text(screen, f"Pellets left: {game.pellets_left}",
                   8, maze.pixel_height - 24,
                   size=15, color=(200, 200, 180))
 
         # Right panel
-        draw_panel(screen, pacman, ghosts, tick, show_overlay,
+        draw_panel(screen, pacman, ghosts, game.tick, show_overlay,
                    maze.pixel_width, maze.pixel_height, elapsed_seconds)
 
         pygame.display.flip()
 
         # ── Game-over screen ──────────────────────────────────────────────
-        if game_over and death_pause == 0:
-            replay = end_screen(screen, clock, won, pacman, total_w, total_h,
+        if game.finished:
+            replay = end_screen(screen, clock, game.won, pacman, total_w, total_h,
                                 elapsed_seconds)
             if replay:
-                pacman, ghosts = make_agents()
-                game_over = won = False
-                tick = 0; death_pause = 0
+                game.restart()
                 game_started_at = time.perf_counter()
             else:
                 running = False

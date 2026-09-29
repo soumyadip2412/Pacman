@@ -71,6 +71,35 @@ ROWS = len(MAZE_LAYOUT)
 COLS = len(MAZE_LAYOUT[0])
 
 
+VALID_CELLS = {0, 1, 2, 3, 'P', 'G'}
+
+
+def validate_layout(layout) -> None:
+    """
+    Raise ValueError if *layout* cannot be played: it must be a non-empty
+    rectangle of known cell codes with exactly one Pac-Man spawn ('P'),
+    at least one ghost spawn ('G') and at least one pellet (2 or 3).
+    """
+    if not layout or not layout[0]:
+        raise ValueError("maze layout is empty")
+
+    width = len(layout[0])
+    for r, row in enumerate(layout):
+        if len(row) != width:
+            raise ValueError(f"maze row {r} has {len(row)} cells, expected {width}")
+        for c, cell in enumerate(row):
+            if cell not in VALID_CELLS:
+                raise ValueError(f"unknown maze cell {cell!r} at ({r}, {c})")
+
+    cells = [cell for row in layout for cell in row]
+    if cells.count('P') != 1:
+        raise ValueError(f"maze needs exactly one 'P', found {cells.count('P')}")
+    if 'G' not in cells:
+        raise ValueError("maze needs at least one ghost spawn 'G'")
+    if 2 not in cells and 3 not in cells:
+        raise ValueError("maze has no pellets")
+
+
 class Maze:
     """
     Represents the game maze as a 2-D grid.
@@ -82,9 +111,12 @@ class Maze:
     * Render walls, pellets and visualisation overlays.
     """
 
-    def __init__(self):
-        self.rows = ROWS
-        self.cols = COLS
+    def __init__(self, layout=None):
+        layout = MAZE_LAYOUT if layout is None else layout
+        validate_layout(layout)
+
+        self.rows = len(layout)
+        self.cols = len(layout[0])
         self.cell_size = CELL_SIZE
 
         # -- parse layout ------------------------------------------------
@@ -96,7 +128,7 @@ class Maze:
 
         self.grid = []         # 2D list: 0=path, 1=wall (after parsing)
 
-        for r, row in enumerate(MAZE_LAYOUT):
+        for r, row in enumerate(layout):
             grid_row = []
             for c, cell in enumerate(row):
                 if cell == 1:
